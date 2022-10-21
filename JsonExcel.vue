@@ -125,20 +125,20 @@ export default {
           var  name = this.multiNames[i]
           let json = this.getProcessedJson(data[i], this.downloadFields);
           if (this.type === "html") {
-            // this is mainly for testing
-            await this.export(
+            // this is mainly for testing; await will trigger alert("allow to download multi files")
+            this.export(
               this.jsonToXLS(json),
               name.replace(".xls", ".html"),
               "text/html"
             );
           } else if (this.type === "csv") {
-            await this.export(
+            this.export(
               this.jsonToCSV(json),
               name.replace(".xls", ".csv"),
               "application/csv"
             );
           }
-          await this.export(
+          this.export(
             this.jsonToXLS(json),
             name,
             "application/vnd.ms-excel"
