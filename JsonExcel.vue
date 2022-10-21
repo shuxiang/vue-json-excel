@@ -80,6 +80,15 @@ export default {
       type: Boolean,
       default: false,
     },
+    // support multi excel export
+    multi: {
+      type: Boolean,
+      default: false,
+    },
+    multiNames: {
+      type: Array,
+      default: () => [],
+    },
   },
   computed: {
     // unique identifier
@@ -92,6 +101,7 @@ export default {
       if (this.fields) return this.fields;
 
       if (this.exportFields) return this.exportFields;
+      return []
     },
   },
   methods: {
@@ -106,42 +116,72 @@ export default {
         return;
       }
 
-      let json = this.getProcessedJson(data, this.downloadFields);
-      if (this.type === "html") {
-        // this is mainly for testing
+      if (this.multi){
+        if(this.multiNames.length!=this.data.length){
+          console.log('multi-names.length!=data.length')
+          return
+        }
+        for(var i=0;i<data.length;i++){
+          var  name = this.multiNames[i]
+          let json = this.getProcessedJson(data[i], this.downloadFields);
+          if (this.type === "html") {
+            // this is mainly for testing
+            await this.export(
+              this.jsonToXLS(json),
+              name.replace(".xls", ".html"),
+              "text/html"
+            );
+          } else if (this.type === "csv") {
+            await this.export(
+              this.jsonToCSV(json),
+              name.replace(".xls", ".csv"),
+              "application/csv"
+            );
+          }
+          await this.export(
+            this.jsonToXLS(json),
+            name,
+            "application/vnd.ms-excel"
+          );
+        }
+      }else{
+        let json = this.getProcessedJson(data, this.downloadFields);
+        if (this.type === "html") {
+          // this is mainly for testing
+          return this.export(
+            this.jsonToXLS(json),
+            this.name.replace(".xls", ".html"),
+            "text/html"
+          );
+        } else if (this.type === "csv") {
+          return this.export(
+            this.jsonToCSV(json),
+            this.name.replace(".xls", ".csv"),
+            "application/csv"
+          );
+        }
         return this.export(
           this.jsonToXLS(json),
-          this.name.replace(".xls", ".html"),
-          "text/html"
-        );
-      } else if (this.type === "csv") {
-        return this.export(
-          this.jsonToCSV(json),
-          this.name.replace(".xls", ".csv"),
-          "application/csv"
+          this.name,
+          "application/vnd.ms-excel"
         );
       }
-      return this.export(
-        this.jsonToXLS(json),
-        this.name,
-        "application/vnd.ms-excel"
-      );
     },
     /*
-		Use downloadjs to generate the download link
-		*/
+        Use downloadjs to generate the download link
+        */
     export: async function (data, filename, mime) {
       let blob = this.base64ToBlob(data, mime);
       if (typeof this.beforeFinish === "function") await this.beforeFinish();
       download(blob, filename, mime);
     },
     /*
-		jsonToXLS
-		---------------
-		Transform json data into an xml document with MS Excel format, sadly
-		it shows a prompt when it opens, that is a default behavior for
-		Microsoft office and cannot be avoided. It's recommended to use CSV format instead.
-		*/
+        jsonToXLS
+        ---------------
+        Transform json data into an xml document with MS Excel format, sadly
+        it shows a prompt when it opens, that is a default behavior for
+        Microsoft office and cannot be avoided. It's recommended to use CSV format instead.
+        */
     jsonToXLS(data) {
       let xlsTemp =
         '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><meta name=ProgId content=Excel.Sheet> <meta name=Generator content="Microsoft Excel 11"><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>${worksheet}</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--><style>br {mso-data-placement: same-cell;}</style></head><body><table>${table}</table></body></html>';
@@ -168,7 +208,8 @@ export default {
 
       //Data
       xlsData += "<tbody>";
-      data.map(function (item, index) {
+      //data.map(function (item, index) {
+      data.map(function (item) {
         xlsData += "<tr>";
         for (let key in item) {
           xlsData +=
@@ -197,10 +238,10 @@ export default {
         .replace("${worksheet}", this.worksheet);
     },
     /*
-		jsonToCSV
-		---------------
-		Transform json data into an CSV file.
-		*/
+        jsonToCSV
+        ---------------
+        Transform json data into an CSV file.
+        */
     jsonToCSV(data) {
       let _self = this;
       var csvData = [];
@@ -227,7 +268,8 @@ export default {
           if (_self.escapeCsv) {
             escapedCSV = '="' + escapedCSV + '"'; // cast Numbers to string
             if (escapedCSV.match(/[,"\n]/)) {
-              escapedCSV = '"' + escapedCSV.replace(/\"/g, '""') + '"';
+              // escapedCSV = '"' + escapedCSV.replace(/\"/g, '""') + '"';
+              escapedCSV = '"' + escapedCSV.replace(/"/g, '""') + '"';
             }
           }
           csvData.push(escapedCSV);
@@ -243,15 +285,16 @@ export default {
       return csvData.join("");
     },
     /*
-		getProcessedJson
-		---------------
-		Get only the data to export, if no fields are set return all the data
-		*/
+        getProcessedJson
+        ---------------
+        Get only the data to export, if no fields are set return all the data
+        */
     getProcessedJson(data, header) {
       let keys = this.getKeys(data, header);
       let newData = [];
       let _self = this;
-      data.map(function (item, index) {
+      //data.map(function (item, index) {
+      data.map(function (item) {
         let newItem = {};
         for (let label in keys) {
           let property = keys[label];
@@ -274,10 +317,10 @@ export default {
       return keys;
     },
     /*
-		parseExtraData
-		---------------
-		Parse title and footer attribute to the csv format
-		*/
+        parseExtraData
+        ---------------
+        Parse title and footer attribute to the csv format
+        */
     parseExtraData(extraData, format) {
       let parseData = "";
       if (Array.isArray(extraData)) {
@@ -301,7 +344,8 @@ export default {
         value = this.getValueFromNestedItem(item, indexes);
       else value = this.parseValue(item[field]);
 
-      if (key.hasOwnProperty("callback"))
+      // if (key.hasOwnProperty("callback"))
+      if (Object.prototype.hasOwnProperty.call(key, "callback"))
         value = this.getValueFromCallback(value, key.callback);
 
       return value;
